@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "lobe_chat",
+  "productName": "LobeChatClient",
   "version": "0.1.0",
   "identifier": "com.lobe_chat.app",
   "build": {
@@ -10,9 +10,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "lobe_chat",
-        "width": 800,
-        "height": 600
+        "title": "LobeChat",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
