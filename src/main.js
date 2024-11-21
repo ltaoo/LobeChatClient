@@ -1,6 +1,5 @@
 const { invoke } = window.__TAURI__.core;
 
-let $container;
 let lobeChatServerFailed = false;
 
 async function greet() {
