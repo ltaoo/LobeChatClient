@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LobeChatClient",
   "version": "0.1.0",
-  "identifier": "com.lobe_chat.app",
+  "identifier": "com.lobe-chat-client.app",
   "build": {
     "frontendDist": "../src"
   },
