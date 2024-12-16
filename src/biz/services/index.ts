@@ -1,6 +1,13 @@
 import { request } from "@/biz/requests";
 
 /**
+ * 下载 deno 并配置环境变量
+ */
+export function downloadDeno() {
+  return request.post<void>("download_deno_then_enable", {});
+}
+
+/**
  * 下载压缩包并解压
  */
 export function downloadLobeChatBundle(payload: { url: string; path: string }) {
@@ -29,6 +36,6 @@ export function execute(params: string) {
 
 /**
  */
-export function showLobeChatWindow() {
-  return request.post<void>("set_complete", {});
+export function showLobeChatWindow(body: { url: string }) {
+  return request.post<void>("set_complete", body);
 }

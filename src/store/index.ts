@@ -77,7 +77,7 @@ export const app = new Application({
   async beforeReady() {
     const { pathname, query } = history.$router;
     const route = routesWithPathname[pathname];
-    console.log("[STORE]index", pathname, route, app.$user.isLogin);
+    // console.log("[STORE]index", pathname, route, app.$user.isLogin);
     if (!route) {
       history.push("root.notfound");
       return Result.Ok(null);
@@ -90,10 +90,7 @@ export const app = new Application({
       history.push("root.home_layout.index");
       return Result.Ok(null);
     }
-    console.log(
-      "[STORE]index - before if (!app.$user.isLogin",
-      app.$user.isLogin
-    );
+    // console.log("[STORE]index - before if (!app.$user.isLogin");
     // if (!app.$user.isLogin) {
     //   app.tip({
     //     text: ["请先登录"],
@@ -101,7 +98,7 @@ export const app = new Application({
     //   history.push("root.login", { redirect: route.pathname });
     //   return Result.Err("need login");
     // }
-    console.log("before client.appendHeaders", app.$user.token);
+    // console.log("before client.appendHeaders", app.$user.token);
     if (!history.isLayout(route.name)) {
       history.push(route.name, query, { ignore: true });
       return Result.Ok(null);

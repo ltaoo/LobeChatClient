@@ -27,7 +27,7 @@ once_cell = "1.20.2"
 portable-pty = "0.8.1"
 dirs = "5.0.1"
 tauri-plugin-store = "2"
-reqwest = { version = "0.12.9", features = ["stream"] }
+reqwest = { version = "0.12.9", features = ["stream", "blocking", "json"] }
 futures-util = "0.3.31"
 zip = "2.2.1"
 thiserror = "2.0.7"

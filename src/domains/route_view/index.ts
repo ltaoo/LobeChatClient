@@ -194,7 +194,7 @@ export class RouteViewCore extends BaseDomain<TheTypesOfEvents> {
     if (!this.subViews.includes(view)) {
       this.subViews.push(view);
     }
-    console.log("[DOMAIN]route_view - appendView", this.title, this.subViews, view);
+    // console.log("[DOMAIN]route_view - appendView", this.title, this.subViews, view);
     this.emit(Events.ViewsChange, [...this.subViews]);
   }
   replaceViews(views: RouteViewCore[]) {
@@ -239,7 +239,7 @@ export class RouteViewCore extends BaseDomain<TheTypesOfEvents> {
   }
   /** 让自身的一个子视图变为可见 */
   showView(subView: RouteViewCore, options: Partial<{ reason: "show_sibling" | "back"; destroy: boolean }> = {}) {
-    console.log("[DOMAIN]route_view - showSubView", this.title, subView.title, this.curView?.title);
+    // console.log("[DOMAIN]route_view - showSubView", this.title, subView.title, this.curView?.title);
     if (subView === this) {
       console.warn("cannot show self");
       return;
