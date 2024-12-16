@@ -6,8 +6,11 @@
     "linux"
   ],
   "windows": [
-    "main"
+    "setup"
   ],
   "permissions": [
+    "window-state:default",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging"
   ]
 }

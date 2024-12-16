@@ -44,96 +44,20 @@ function fetchEnvOfLanguageOrSDK(lines) {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     (() => {
-      if (line.includes("node -v")) {
+      if (line.includes("deno -v")) {
         const next_line1 = lines[i + 1];
         const next_line2 = lines[i + 2];
-        const regex = /v([0-9.]{1,})/;
+        const regex = /deno ([0-9.]{1,})/;
         const m1 = next_line1 && next_line1.match(regex);
         if (m1) {
-          env["nodejs"] = {
+          env["deno"] = {
             version: m1[1],
           };
           return;
         }
         const m2 = next_line2 && next_line2.match(regex);
         if (m2) {
-          env["nodejs"] = {
-            version: m2[1],
-          };
-          return;
-        }
-      }
-      if (line.includes("pnpm -v")) {
-        const next_line1 = lines[i + 1];
-        const next_line2 = lines[i + 2];
-        const regex = /^([0-9.]{1,})/;
-        const m1 = next_line1 && next_line1.match(regex);
-        if (m1) {
-          env["pnpm"] = {
-            version: m1[1],
-          };
-          return;
-        }
-        const m2 = next_line2 && next_line2.match(regex);
-        if (m2) {
-          env["pnpm"] = {
-            version: m2[1],
-          };
-          return;
-        }
-      }
-      if (line.includes("yarn -v")) {
-        const next_line1 = lines[i + 1];
-        const next_line2 = lines[i + 2];
-        const regex = /^([0-9.]{1,})/;
-        const m1 = next_line1 && next_line1.match(regex);
-        if (m1) {
-          env["yarn"] = {
-            version: m1[1],
-          };
-          return;
-        }
-        const m2 = next_line2 && next_line2.match(regex);
-        if (m2) {
-          env["yarn"] = {
-            version: m2[1],
-          };
-          return;
-        }
-      }
-      if (line.includes("npm -v")) {
-        const next_line1 = lines[i + 1];
-        const next_line2 = lines[i + 2];
-        const regex = /^([0-9.]{1,})/;
-        const m1 = next_line1 && next_line1.match(regex);
-        if (m1) {
-          env["npm"] = {
-            version: m1[1],
-          };
-          return;
-        }
-        const m2 = next_line2 && next_line2.match(regex);
-        if (m2) {
-          env["npm"] = {
-            version: m2[1],
-          };
-          return;
-        }
-      }
-      if (line.includes("git -v")) {
-        const next_line1 = lines[i + 1];
-        const next_line2 = lines[i + 2];
-        const regex = /^git version ([0-9.]{1,}).windows.1/;
-        const m1 = next_line1 && next_line1.match(regex);
-        if (m1) {
-          env["git"] = {
-            version: m1[1],
-          };
-          return;
-        }
-        const m2 = next_line2 && next_line2.match(regex);
-        if (m2) {
-          env["git"] = {
+          env["deno"] = {
             version: m2[1],
           };
           return;
@@ -145,11 +69,11 @@ function fetchEnvOfLanguageOrSDK(lines) {
 }
 
 async function checkENV() {
-  await execute(`node -v\r`);
-  await execute(`pnpm -v\r`);
-  await execute(`yarn -v\r`);
-  await execute(`npm -v\r`);
-  await execute(`git -v\r`);
+  await execute(`deno -v\r`);
+  // await execute(`pnpm -v\r`);
+  // await execute(`yarn -v\r`);
+  // await execute(`npm -v\r`);
+  // await execute(`git -v\r`);
 }
 async function cloneLobeChatRepo(config) {
   console.log("start cloneLobeChatRepo", config.app_dir);
@@ -187,11 +111,8 @@ async function buildLobeChat(config, state) {
 }
 async function startLobeChatServer(config, state) {
   await execute(`cd ${config.lobe_chat_repo_dir}\r`);
-  if (config.lobe_chat_server_port !== undefined) {
-    await execute(`pnpm next start -p ${config.lobe_chat_server_port}\r`);
-    return;
-  }
-  await execute(`npm run start\r`);
+  await execute(`deno run --allow-all server.cjs\r`);
+  await execute("set_complete", { task: "frontend" });
 }
 async function checkExistingBuildDir() {}
 
@@ -446,6 +367,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     rows: term.rows,
     cols: term.cols,
   });
+  const r = await fetch("download_file", {
+    url: "https://github.com/denoland/deno/releases/download/v2.1.4/deno-aarch64-apple-darwin.zip",
+    savePath: "deno-aarch64-apple-darwin.zip",
+  });
+  console.log(r);
   if (config.lobe_chat_build_dir === undefined) {
     await checkENV();
     return;
