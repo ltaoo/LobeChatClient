@@ -18,6 +18,7 @@
         "title": "LobeChat Setup",
         "width": 680,
         "height": 240,
+        "visible": true,
         "resizable": true,
         "fullscreen": false,
         "decorations": false,

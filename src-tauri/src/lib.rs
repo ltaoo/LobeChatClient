@@ -447,28 +447,24 @@ async fn resize_pty(rows: u16, cols: u16, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
-fn set_complete(url: String, app: AppHandle) -> Result<String, ()> {
+fn set_complete(url: String, app: tauri::AppHandle) -> Result<String, ()> {
+    println!("show main window with url {}", url);
     let setup_window = app.get_webview_window("setup").unwrap();
-    // let main_window = app.get_webview_window("main").unwrap();
     setup_window.close().unwrap();
-    let main_window = WebviewWindow::builder(
-        &app,
-        "main",
-        tauri::WebviewUrl::App(url.into()),
-    )
-    .build()
-    .unwrap();
+
+    let main_window = WebviewWindow::builder(&app, "main", tauri::WebviewUrl::App(url.into()))
+        .build()
+        .unwrap();
     main_window.set_size(PhysicalSize::new(1280, 880));
     main_window.set_title("LobeChatClient");
-    main_window.center();
     main_window.show();
-    main_window.center();
-    // main_window.show().unwrap();
-    // let main_window = WindowBuilder::new(
-    //     app,
-    //     "main",
-    //     tauri::WindowUrl::External("http://127.0.0.1:3000".parse().unwrap()),
-    // );
+
+    // let main_window = WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::App(url.into())).build().unwrap();
+    // main_window.show();
+
+    // thread::spawn(move || {
+    //     let _ = tokio::runtime::Runtime::new().unwrap().block_on(show_main_window(app_clone, url));
+    // });
     // return Ok(());
     return Ok(json!({
         "code": 0,

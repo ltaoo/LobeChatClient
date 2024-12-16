@@ -4,6 +4,7 @@
 import { createSignal, onCleanup, onMount } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { ViewComponent, ViewComponentProps } from "@/store/types";
 import { base, Handler } from "@/domains/base";
@@ -207,22 +208,25 @@ function HomeIndexPageCore(props: ViewComponentProps) {
         }
         return null;
       })();
-      if (url === null) {
-        app.tip({
-          text: ["没有获取到地址"],
+      console.log("0---------- before open", url);
+      if (url) {
+        // requests.showLobeChat.run({ url });
+        const setup = getCurrentWebviewWindow();
+        setup.hide();
+        setTimeout(() => {
+          setup.close();
+        }, 1000);
+        const webview = new WebviewWindow("main", {
+          title: "LobeChatClient",
+          width: 1200,
+          height: 80,
+          url,
         });
-        return;
+        webview.show();
       }
       // if (url === null) {
       //   url = `http://localhost:${_config.lobe_chat_server_port}`;
       // }
-      let ready = str_lines.find((line) => {
-        return line.match(/Ready in [0-9]{1,}ms/);
-      });
-      if (ready === undefined) {
-        return;
-      }
-      await requests.showLobeChat.run({ url });
     }
   });
   const state = {};
