@@ -291,7 +291,7 @@ async fn download_zip_file_then_unzip(
     match get_file_parent_directory(&filepath) {
         Some(parent) => {
             let zip_folder = parent.join(filepath.file_stem().unwrap());
-            if is_directory_exists(&zip_folder) {
+            if !is_directory_exists(&zip_folder) {
                 extract_zip(filepath, &zip_folder);
             }
             window.emit(
