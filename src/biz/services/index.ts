@@ -1,5 +1,9 @@
 import { request } from "@/biz/requests";
 
+export function fetchSetupConfig() {
+  return request.post<{ deno_bin: string; deno_existing: boolean; lobe_chat_dir: string }>("fetch_setup_info", {});
+}
+
 /**
  * 下载 deno 并配置环境变量
  */
@@ -18,7 +22,7 @@ export function downloadLobeChatBundle(payload: { url: string; path: string }) {
  * 启动一个 pty
  */
 export function startPTY() {
-  return request.post("async_shell", {});
+  return request.post("start_pty", {});
 }
 
 /**

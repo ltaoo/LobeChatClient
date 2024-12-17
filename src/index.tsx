@@ -40,7 +40,7 @@ function Application() {
   });
 
   return (
-    <div class={"screen overflow-hidden"}>
+    <div class={"screen overflow-hidden scroll scroll--fix"}>
       <Show when={!state().ready}>
         <div class="flex items-center justify-center w-full h-full">
           <div class="flex flex-col items-center text-slate-500">

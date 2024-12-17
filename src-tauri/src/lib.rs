@@ -36,6 +36,7 @@ struct AppState {
     pub deno_bin: String,
     pub deno_existing: bool,
     pub lobe_chat_dir: String,
+    pub pty_existing: bool,
     pub pty_pair: AsyncMutex<PtyPair>,
     pub writer: AsyncMutex<Box<dyn Write + Send>>,
 }
@@ -311,7 +312,7 @@ async fn download_file(
     window: tauri::Window,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<String, Error> {
+) -> Result<serde_json::Value, Error> {
     // let window = app.get_webview_window("setup").unwrap();
     // window.emit("data", "Start download LobeChat.zip");
     let store = app.store("store.json");
@@ -320,8 +321,7 @@ async fn download_file(
             "code": 101,
             "msg": "fetch store failed",
             "data": None::<String>,
-        })
-        .to_string());
+        }));
     }
     let store = store.unwrap();
     let client = Client::new();
@@ -331,8 +331,7 @@ async fn download_file(
             "code": 101,
             "msg": "fetch url failed",
             "data": None::<String>,
-        })
-        .to_string());
+        }));
     }
     let response1 = r.unwrap();
     if !response1.status().is_success() {
@@ -340,8 +339,7 @@ async fn download_file(
             "code": 101,
             "msg": "response is not ok",
             "data": None::<String>,
-        })
-        .to_string());
+        }));
     }
     let cloned_window = window.clone();
     let url_clone = url.clone();
@@ -352,8 +350,7 @@ async fn download_file(
             "code": 101,
             "msg": "there is no app_dir",
             "data": None::<String>,
-        })
-        .to_string());
+        }));
     }
     let app_dir_str1 = app_dir_str.unwrap();
     let a = app_dir_str1.as_str();
@@ -362,8 +359,7 @@ async fn download_file(
             "code": 101,
             "msg": "there is no app_dir2",
             "data": None::<String>,
-        })
-        .to_string());
+        }));
     }
     let app_dir_str2 = a.unwrap();
     let mut filepath = PathBuf::from(app_dir_str2);
@@ -381,12 +377,20 @@ async fn download_file(
         "code": 0,
         "msg": "start download file",
         "data": None::<String>,
-    })
-    .to_string());
+    }));
 }
 
 #[tauri::command]
-async fn async_shell(state: State<'_, AppState>) -> Result<String, String> {
+async fn start_pty(state: State<'_, tokio::sync::Mutex<AppState>>) -> Result<serde_json::Value, String> {
+    let mut state = state.lock().await;
+    if state.pty_existing == true {
+        return Ok(json!({
+            "code": 0,
+            "msg": "",
+            "data": serde_json::Value::Null,
+        }));
+    }
+
     #[cfg(target_os = "windows")]
     let mut cmd = CommandBuilder::new("powershell.exe");
     #[cfg(target_os = "windows")]
@@ -403,29 +407,37 @@ async fn async_shell(state: State<'_, AppState>) -> Result<String, String> {
         .slave
         .spawn_command(cmd)
         .map_err(|err| err.to_string())?;
+    state.pty_existing = true;
 
     thread::spawn(move || {
         let status = child.wait().unwrap();
         exit(status.exit_code() as i32)
     });
+
     return Ok(json!({
         "code": 0,
         "msg": "",
         "data": serde_json::Value::Null,
-    })
-    .to_string());
+    }));
 }
 
 #[tauri::command]
-async fn write_to_pty(data: String, state: State<'_, AppState>) -> Result<(), ()> {
-    // println!("write pty {}", data);
+async fn write_to_pty(data: String, state: State<'_, tokio::sync::Mutex<AppState>>) -> Result<(), ()> {
+    let state = state.lock().await;
+    println!("write pty {}", data);
     let mut w = state.writer.lock().await;
     write!(w, "{}", data).map_err(|_| ());
     return Ok(());
 }
 
 #[tauri::command]
-async fn resize_pty(rows: u16, cols: u16, state: State<'_, AppState>) -> Result<String, ()> {
+async fn resize_pty(
+    rows: u16,
+    cols: u16,
+    state: State<'_, tokio::sync::Mutex<AppState>>,
+) -> Result<serde_json::Value, ()> {
+    let state = state.lock().await;
+
     state
         .pty_pair
         .lock()
@@ -442,13 +454,12 @@ async fn resize_pty(rows: u16, cols: u16, state: State<'_, AppState>) -> Result<
         "code": 0,
         "msg": "",
         "data": serde_json::Value::Null,
-    })
-    .to_string());
+    }));
 }
 
 #[tauri::command]
-fn set_complete(url: String, app: tauri::AppHandle) -> Result<String, ()> {
-    println!("show main window with url {}", url);
+fn set_complete(url: String, app: tauri::AppHandle) -> Result<serde_json::Value, ()> {
+    // println!("show main window with url {}", url);
     let setup_window = app.get_webview_window("setup").unwrap();
     setup_window.close().unwrap();
 
@@ -470,14 +481,16 @@ fn set_complete(url: String, app: tauri::AppHandle) -> Result<String, ()> {
         "code": 0,
         "msg": "",
         "data": serde_json::Value::Null,
-    })
-    .to_string());
+    }));
 }
 
 #[tauri::command]
-fn download_deno_then_enable(app: AppHandle, window: tauri::Window) -> Result<String, ()> {
+fn download_deno_then_enable(
+    app: AppHandle,
+    window: tauri::Window,
+) -> Result<serde_json::Value, ()> {
     let window = app.get_webview_window("setup").unwrap();
-    window.emit("data", "Start download deno\r".as_bytes().to_vec());
+    // window.emit("data", "Start download deno\r".as_bytes().to_vec());
     let cloned_window = window.clone();
     thread::spawn(move || {
         let _ = tokio::runtime::Runtime::new()
@@ -488,8 +501,21 @@ fn download_deno_then_enable(app: AppHandle, window: tauri::Window) -> Result<St
         "code": 0,
         "msg": "",
         "data": serde_json::Value::Null,
-    })
-    .to_string());
+    }));
+}
+
+#[tauri::command]
+async fn fetch_setup_info(state: State<'_, tokio::sync::Mutex<AppState>>) -> Result<serde_json::Value, ()> {
+    let state = state.lock().await;
+    return Ok(json!({
+        "code": 0,
+        "msg": "",
+        "data": json!({
+            "deno_bin": state.deno_bin,
+            "deno_existing": state.deno_existing,
+            "lobe_chat_dir": state.lobe_chat_dir,
+        }),
+    }));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -521,13 +547,14 @@ pub fn run() {
         .display()
         .to_string();
 
-    let state = AppState {
+    let state = tokio::sync::Mutex::new(AppState {
         deno_bin: deno_bin_path_string.clone(),
         deno_existing: deno_bin_existing,
         lobe_chat_dir: lobe_build_dir.clone(),
+        pty_existing: false,
         pty_pair: AsyncMutex::new(pty_pair),
         writer: AsyncMutex::new(writer),
-    };
+    });
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_window_state::Builder::new().build())
@@ -535,47 +562,19 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            fetch_setup_info,
             download_deno_then_enable,
             write_to_pty,
             resize_pty,
-            async_shell,
+            start_pty,
             download_file,
             set_complete,
         ])
-        .setup(move |app| {
-            // window.emit(
-            //     "loaded",
-            //     json!({ "deno_bin": deno_bin_path_string, "deno_existing": deno_bin_existing, "lobe_chat_dir": lobe_build_dir }),
-            // );
-            // let store = app.store("store.json")?;
-            // // let dir = app.path().app_data_dir().unwrap();
-            // let dir = get_document_dir();
-            // store.set("app_dir", dir.to_string_lossy());
-            // // let dir2 = dirs::home_dir().unwrap();
-            // // store.set("app_dir2", dir2.to_string_lossy());
-            // // let lobe_repo_dir: PathBuf = dir.to_path_buf().join("lobe-chat");
-            // // if fs::metadata(lobe_repo_dir.clone()).is_ok() {
-            // //     store.set("lobe_chat_repo_dir", lobe_repo_dir.to_string_lossy());
-            // // }
-            // let lobe_build_dir: PathBuf = dir.join("lobe-chat_v1.36.11");
-            // if fs::metadata(lobe_build_dir.clone()).is_ok() {
-            //     store.set("lobe_chat_build_dir", lobe_build_dir.to_string_lossy());
-            // }
-            // // store.set("lobe_chat_server_port", "8100".to_string());
-            // let GITHUB_PROXY_URL = "https://ghp.ci";
-            // let LOBE_CHAT_GIT_REPOSITORY_URL = "https://github.com/lobehub/lobe-chat";
-            // let NPM_REGISTER_MIRROR_URL = "https://registry.npmmirror.com";
-            // store.set("github_proxy_url", GITHUB_PROXY_URL);
-            // store.set("lobe_chat_repo_url", LOBE_CHAT_GIT_REPOSITORY_URL);
-            // store.set("npm_register_mirror_url", NPM_REGISTER_MIRROR_URL);
-            Ok(())
-        })
+        .setup(move |app| Ok(()))
         .on_page_load(move |window, _| {
-            // let window = app.get_webview_window("setup").unwrap();
             let window = window.clone();
             let reader = reader.clone();
             let output = output.clone();
-
             thread::spawn(move || {
                 let reader = reader.lock().unwrap().take();
                 if let Some(mut reader) = reader {

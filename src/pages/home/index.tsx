@@ -2,6 +2,11 @@
  * @file 首页
  */
 import { createSignal, onCleanup, onMount } from "solid-js";
+import { Terminal } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
+import { FitAddon } from "@xterm/addon-fit";
+import { CanvasAddon } from "@xterm/addon-canvas";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -13,6 +18,7 @@ import { execute } from "@/biz/requests";
 import {
   downloadDeno,
   downloadLobeChatBundle,
+  fetchSetupConfig,
   resizePTYWindowSize,
   showLobeChatWindow,
   startPTY,
@@ -24,6 +30,8 @@ function HomeIndexPageCore(props: ViewComponentProps) {
   const { app } = props;
 
   const requests = {
+    /** 获取初始化信息 */
+    fetchSetupConfig: new RequestCore(fetchSetupConfig),
     /** 启动一个终端 */
     startPTY: new RequestCore(startPTY),
     /** 调整终端宽高 */
@@ -83,24 +91,17 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     allowProposedApi: false,
     tabStopWidth: 4,
     smoothScrollDuration: 0,
-    scrollback: 80,
-    scrollOnUserInput: true,
-    scrollSensitivity: 1,
+    scrollback: 0,
+    scrollOnUserInput: false,
+    // scrollSensitivity: 1,
     cols: 120,
     rows: 30,
   });
-  // @ts-ignore
-  term.loadAddon(new WebLinksAddon.WebLinksAddon());
-  // @ts-ignore
-  term.loadAddon(new CanvasAddon.CanvasAddon());
-  // @ts-ignore
-  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(new WebLinksAddon());
+  term.loadAddon(new CanvasAddon());
+  const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
 
-  async function checkENV() {
-    await execute(`deno -v\r`);
-  }
-  async function startLobeChatServer(bin_path: string) {}
   function getTermLines(messages: string[], range: number[]) {
     const lines: string[] = [];
     for (let i = range[0]; i < range[1] + 1; i += 1) {
@@ -110,6 +111,12 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       }
     }
     return lines;
+  }
+  async function startLobeChatServer(config: { lobe_chat_path: string; bin_path: string }) {
+    // console.log("[PAGE]home/index - startLobeChatServer", _config.lobe_chat_build_dir);
+    await execute(`cd ${config.lobe_chat_path}\r`);
+    await execute(`${config.bin_path} run --allow-all server.cjs\r`);
+    _pty_state.step = 4;
   }
   const handle_output = debounce(800, async () => {
     if (_pty_state.step === 0) {
@@ -128,7 +135,7 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       if (!env["deno"] && _pty_state.error_count < 3) {
         // _pty_state.error_count += 1;
         _pty_state.step = 1;
-        await requests.downloadDeno.run();
+        // await requests.downloadDeno.run();
         return;
       }
       _pty_state.initial = true;
@@ -157,8 +164,6 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       const line = lines[lines.length - 1];
       if (line.includes("Deno was installed successfully")) {
         _pty_state.step = 2;
-        await execute(`clear\r`);
-
         return;
       }
       return;
@@ -184,13 +189,7 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       _pty_state.range_end = _messages.length - 1;
       const lines = getTermLines(_messages, [_pty_state.range_start, _pty_state.range_end]);
       _pty_state.range_start = _pty_state.range_end;
-      // console.log("lines", lines, messages, _pty_state.range_end);
-      // const buf = term.buffer.active;
-      // const end2 = buf.length - 1;
-      // const lines = getTermLines([_pty_state.range_start, end2]);
-      // _pty_state.range_start = end2;
       const str_lines = lines.map((l) => l.trim()).filter(Boolean);
-      // console.log("4. check the lobe-chat server is running.", str_lines);
       if (str_lines.length === 0) {
         return;
       }
@@ -208,25 +207,22 @@ function HomeIndexPageCore(props: ViewComponentProps) {
         }
         return null;
       })();
-      console.log("0---------- before open", url);
-      if (url) {
-        // requests.showLobeChat.run({ url });
-        const setup = getCurrentWebviewWindow();
-        setup.hide();
-        setTimeout(() => {
-          setup.close();
-        }, 1000);
-        const webview = new WebviewWindow("main", {
-          title: "LobeChatClient",
-          width: 1200,
-          height: 80,
-          url,
-        });
-        webview.show();
+      if (!url) {
+        return;
       }
-      // if (url === null) {
-      //   url = `http://localhost:${_config.lobe_chat_server_port}`;
-      // }
+      // requests.showLobeChat.run({ url });
+      const setup = getCurrentWebviewWindow();
+      setup.hide();
+      setTimeout(() => {
+        setup.close();
+      }, 1000);
+      const webview = new WebviewWindow("main", {
+        title: "LobeChatClient",
+        width: 1200,
+        height: 80,
+        url,
+      });
+      webview.show();
     }
   });
   const state = {};
@@ -238,11 +234,13 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     [Events.Change]: typeof state;
   };
   const bus = base<TheTypesOfEvents>();
-  function numbersToChars(arr: number[]) {
-    return arr.map((num) => String.fromCharCode(num));
+  function numbersToChars(arr: Uint8Array) {
+    // @ts-ignore
+    return arr.map((num) => {
+      return String.fromCharCode(num);
+    });
   }
-  listen<number[]>("data", (event) => {
-    console.log(event);
+  listen<Uint8Array>("data", (event) => {
     const message = event.payload;
     const msg = numbersToChars(message).join("");
     const lines = msg.split("↵");
@@ -251,10 +249,6 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     term.write(message);
     term.scrollToBottom();
     handle_output();
-  });
-  listen<{}>("loaded", async (event) => {
-    const data = event.payload;
-    console.log("[PAGE]home/index - loaded", event.payload, data);
   });
   listen<{ bin_path: string }>("can_download_lobe_chat", async (event) => {
     console.log("[PAGE]home/index - can_download_lobe_chat", event.payload);
@@ -274,10 +268,10 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       });
       return;
     }
-    // console.log("[PAGE]home/index - startLobeChatServer", _config.lobe_chat_build_dir);
-    await execute(`cd ${_config.lobe_chat_path}\r`);
-    await execute(`${_config.bin_path} run --allow-all server.cjs\r`);
-    _pty_state.step = 4;
+    startLobeChatServer({
+      bin_path: _config.bin_path,
+      lobe_chat_path: _config.lobe_chat_path,
+    });
   });
   listen("tauri://close-requested", (event) => {
     execute("\x03");
@@ -288,27 +282,11 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     state,
     ui: {},
     async ready() {
-      console.log("[PAGE]home/index");
-      // @ts-ignore
-      // const { load } = window.__TAURI__.store;
-      // const store = await load("store.json", { autoSave: false });
-      // const lobe_chat_repo_dir = await store.get("lobe_chat_repo_dir");
-      // const lobe_chat_build_dir = await store.get("lobe_chat_build_dir");
-      // const app_dir = await store.get("app_dir");
-      // const lobe_chat_server_port = await store.get("lobe_chat_server_port");
-      // const github_proxy_url = await store.get("github_proxy_url");
-      // // const lobe_chat_repo_url = await store.get("lobe_chat_repo_url");
-      // // const npm_register_mirror_url = await store.get("npm_register_mirror_url");
-      // Object.assign(_config, {
-      //   app_dir,
-      //   lobe_chat_repo_dir,
-      //   lobe_chat_build_dir,
-      //   // lobe_chat_repo_url,
-      //   lobe_chat_server_port,
-      //   github_proxy_url,
-      //   // npm_register_mirror_url,
-      // });
-      term.open(document.getElementById("terminal"));
+      const $term = document.getElementById("terminal");
+      if (!$term) {
+        return;
+      }
+      term.open($term);
       const r = await requests.startPTY.run();
       if (r.error) {
         app.tip({
@@ -328,7 +306,40 @@ function HomeIndexPageCore(props: ViewComponentProps) {
         });
         return;
       }
-      // checkENV();
+      const r3 = await requests.fetchSetupConfig.run();
+      if (r3.error) {
+        app.tip({
+          text: ["获取初始化信息失败", r3.error.message],
+        });
+        return;
+      }
+      if (!r3.data.deno_existing) {
+        const r4 = await requests.downloadDeno.run();
+        if (r4.error) {
+          app.tip({
+            text: ["下载 deno 失败", r4.error.message],
+          });
+          return;
+        }
+        return;
+      }
+      if (!r3.data.lobe_chat_dir) {
+        const r4 = await requests.downloadLobeChat.run({
+          url: "https://ghp.ci/https://github.com/ltaoo/LobeChatClient/releases/download/v1.36.11/lobe-chat_v1.36.11.zip",
+          path: "lobe-chat_v1.36.11.zip",
+        });
+        if (r4.error) {
+          app.tip({
+            text: ["下载 LobeChat 失败", r4.error.message],
+          });
+          return;
+        }
+        return;
+      }
+      startLobeChatServer({
+        bin_path: r3.data.deno_bin,
+        lobe_chat_path: r3.data.lobe_chat_dir,
+      });
     },
     destroy() {
       execute("\x03");
@@ -356,7 +367,7 @@ export const HomeIndexPage: ViewComponent = (props) => {
 
   return (
     <div class="overflow-hidden min-h-screen relative flex flex-col bg-black rounded-md">
-      <div data-tauri-drag-region class="absolute z-10 top-0 h-[48px] w-full ">
+      <div data-tauri-drag-region class="absolute z-20 top-0 h-[48px] w-full ">
         <div
           class="absolute top-[10px] right-[12px] w-[36px] h-[36px] cursor-pointer"
           id=""
@@ -373,9 +384,9 @@ export const HomeIndexPage: ViewComponent = (props) => {
               />
             </svg>
           </div>
-          {/* <img class="w-full h-full text-gray-500 hover:text-gray-800" src="/mdi_close.svg" alt="close" /> */}
         </div>
       </div>
+      <div class="absolute z-10 inset-0"></div>
       <div class="absolute z-0 top-0 bottom-0 w-full p-4">
         <div id="terminal" class="w-full h-full"></div>
         <div class="absolute top-0 w-full h-[68px] bg-gradient-to-b from-black to-transparent"></div>

@@ -19,7 +19,7 @@
         "width": 680,
         "height": 240,
         "visible": true,
-        "resizable": true,
+        "resizable": false,
         "fullscreen": false,
         "decorations": false,
         "transparent": true,
