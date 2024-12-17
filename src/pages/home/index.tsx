@@ -1,7 +1,7 @@
 /**
  * @file 首页
  */
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
@@ -25,6 +25,19 @@ import {
 } from "@/biz/services";
 import { debounce } from "@/utils/lodash/debounce";
 import { sleep } from "@/utils";
+import { Check, Info, Loader } from "lucide-solid";
+
+enum LobeChatSteps {
+  CheckDenoExisting,
+  InstallDeno,
+  CheckLobeChatExisting,
+  DownloadLobeChat,
+  StartLobeChatServer,
+  SetupFailed,
+  InstallDenoFailed,
+  DownloadLobeChatFailed,
+  PrepareShowLobeChat,
+}
 
 function HomeIndexPageCore(props: ViewComponentProps) {
   const { app } = props;
@@ -50,6 +63,25 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     step: 0,
     error_count: 0,
     lines: [],
+  };
+  /** 启动 LobeChat 的阶段 */
+  let _step = LobeChatSteps.CheckDenoExisting;
+  let _deno = {
+    existing: false,
+    percent: 0,
+    installed: false,
+    messages: [] as string[],
+    error: null as null | Error,
+  };
+  let _lobe_chat = {
+    existing: false,
+    percent: 0,
+    downloaded: false,
+    messages: [] as string[],
+    error: null as null | Error,
+  };
+  let _server = {
+    messages: [] as string[],
   };
   const _config: Partial<{
     bin_path: string;
@@ -93,9 +125,8 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     smoothScrollDuration: 0,
     scrollback: 0,
     scrollOnUserInput: false,
-    // scrollSensitivity: 1,
-    cols: 120,
-    rows: 30,
+    rows: 24,
+    cols: 80,
   });
   term.loadAddon(new WebLinksAddon());
   term.loadAddon(new CanvasAddon());
@@ -119,72 +150,7 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     _pty_state.step = 4;
   }
   const handle_output = debounce(800, async () => {
-    if (_pty_state.step === 0) {
-      _pty_state.range_end = _messages.length - 1;
-      const lines = getTermLines(_messages, [_pty_state.range_start, _pty_state.range_end]);
-      _pty_state.range_start = _pty_state.range_end;
-      const env: { deno?: { version: string } } = {};
-      const latest_line = lines[lines.length - 2];
-      const regex = /deno ([0-9.]{1,})/;
-      const m1 = latest_line && latest_line.match(regex);
-      if (m1) {
-        env["deno"] = {
-          version: m1[1],
-        };
-      }
-      if (!env["deno"] && _pty_state.error_count < 3) {
-        // _pty_state.error_count += 1;
-        _pty_state.step = 1;
-        // await requests.downloadDeno.run();
-        return;
-      }
-      _pty_state.initial = true;
-      if (_config.lobe_chat_path === undefined) {
-        _pty_state.step = 2;
-        const r = await requests.downloadLobeChat.run({
-          url: "https://ghp.ci/https://github.com/ltaoo/LobeChatClient/releases/download/v1.36.11/lobe-chat_v1.36.11.zip",
-          path: "lobe-chat_v1.36.11.zip",
-        });
-        if (r.error) {
-          app.tip({
-            text: [r.error.message],
-          });
-          return;
-        }
-        return;
-      }
-      _pty_state.step = 4;
-      // startLobeChatServer();
-      return;
-    }
-    if (_pty_state.step === 1) {
-      _pty_state.range_end = _messages.length - 1;
-      const lines = getTermLines(_messages, [_pty_state.range_start, _pty_state.range_end]);
-      _pty_state.range_start = _pty_state.range_end;
-      const line = lines[lines.length - 1];
-      if (line.includes("Deno was installed successfully")) {
-        _pty_state.step = 2;
-        return;
-      }
-      return;
-    }
-    if (_pty_state.step === 2) {
-      _pty_state.range_end = _messages.length - 1;
-      const lines = getTermLines(_messages, [_pty_state.range_start, _pty_state.range_end]);
-      _pty_state.range_start = _pty_state.range_end;
-      const line = lines[lines.length - 1];
-      if (line.includes("unzip lobe-chat success")) {
-        _pty_state.step = 4;
-        return;
-      }
-      // const str_lines = lines.map((l) => l.trim()).filter(Boolean);
-      // const line1 = str_lines[str_lines.length - 1];
-      // if (line1 && line1.match(/Done in [0-9.]{1,}m{0,1}s/)) {
-      //   _pty_state.step = 4;
-      //   return;
-      // }
-      return;
-    }
+    bus.emit(Events.Change, { ..._state });
     if (_pty_state.step === 4) {
       _pty_state.range_end = _messages.length - 1;
       const lines = getTermLines(_messages, [_pty_state.range_start, _pty_state.range_end]);
@@ -210,7 +176,8 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       if (!url) {
         return;
       }
-      // requests.showLobeChat.run({ url });
+      _step = LobeChatSteps.PrepareShowLobeChat;
+      bus.emit(Events.Change, { ..._state });
       const setup = getCurrentWebviewWindow();
       setup.hide();
       setTimeout(() => {
@@ -225,13 +192,26 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       webview.show();
     }
   });
-  const state = {};
+  const _state = {
+    get step() {
+      return _step;
+    },
+    get deno() {
+      return _deno;
+    },
+    get lobe_chat() {
+      return _lobe_chat;
+    },
+    get server() {
+      return _server;
+    },
+  };
 
   enum Events {
     Change,
   }
   type TheTypesOfEvents = {
-    [Events.Change]: typeof state;
+    [Events.Change]: typeof _state;
   };
   const bus = base<TheTypesOfEvents>();
   function numbersToChars(arr: Uint8Array) {
@@ -240,31 +220,56 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       return String.fromCharCode(num);
     });
   }
-  listen<Uint8Array>("data", (event) => {
+  listen<Uint8Array>("term_data", (event) => {
+    if (_pty_state.step !== 4) {
+      return;
+    }
     const message = event.payload;
     const msg = numbersToChars(message).join("");
-    const lines = msg.split("↵");
     console.log(msg);
+    const lines = msg.split("↵");
     _messages.push(...lines);
-    term.write(message);
-    term.scrollToBottom();
+    _server.messages.push(...lines);
+    // term.write(message);
+    // term.scrollToBottom();
     handle_output();
+  });
+  listen<{ uri: string; target: string }>("deno_download_start", (event) => {
+    const data = event.payload;
+    _deno.messages.push(`url: ${data.uri}`);
+    _deno.messages.push(`download to: ${data.target}`);
+    bus.emit(Events.Change, { ..._state });
+  });
+  listen<{ uri: string; target: string }>("lobe_chat_download_start", (event) => {
+    const data = event.payload;
+    _lobe_chat.messages.push(`url: ${data.uri}`);
+    _lobe_chat.messages.push(`download to: ${data.target}`);
+    bus.emit(Events.Change, { ..._state });
   });
   listen<{ bin_path: string }>("can_download_lobe_chat", async (event) => {
     console.log("[PAGE]home/index - can_download_lobe_chat", event.payload);
     Object.assign(_config, event.payload);
-    await requests.downloadLobeChat.run({
-      url: "https://ghp.ci/https://github.com/ltaoo/LobeChatClient/releases/download/v1.36.11/lobe-chat_v1.36.11.zip",
-      path: "lobe-chat_v1.36.11.zip",
-    });
+    _step = LobeChatSteps.DownloadLobeChat;
+    _deno.existing = true;
+    bus.emit(Events.Change, { ..._state });
+    await requests.downloadLobeChat.run();
   });
   listen<{ lobe_chat_path: string }>("can_start_lobe_chat_server", async (event) => {
     console.log("[PAGE]home/index - can_start_lobe_chat_server", event.payload);
+    _step = LobeChatSteps.StartLobeChatServer;
+    _lobe_chat.existing = true;
+    bus.emit(Events.Change, { ..._state });
     // const { lobe_chat_path } = event.payload;
     Object.assign(_config, event.payload);
-    if (!_config.lobe_chat_path || !_config.bin_path) {
+    if (!_config.lobe_chat_path) {
       app.tip({
-        text: ["缺少"],
+        text: ["缺少 lobe_chat 文件"],
+      });
+      return;
+    }
+    if (!_config.bin_path) {
+      app.tip({
+        text: ["缺少 deno 文件"],
       });
       return;
     }
@@ -273,13 +278,37 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       lobe_chat_path: _config.lobe_chat_path,
     });
   });
+  listen<{ reason: string; filepath: string }>("deno_download_failed", (event) => {
+    const data = event.payload;
+    console.log("[PAGE]home/index - deno_download_failed", data);
+    _step = LobeChatSteps.InstallDenoFailed;
+    _deno.error = new Error(`${data.reason} - ${data.filepath}`);
+    bus.emit(Events.Change, { ..._state });
+  });
+  listen<{ reason: string; filepath: string }>("lobe_chat_download_failed", (event) => {
+    const data = event.payload;
+    console.log("[PAGE]home/index - lobe_chat_download_failed", data);
+    _step = LobeChatSteps.DownloadLobeChatFailed;
+    _lobe_chat.error = new Error(`${data.reason} - ${data.filepath}`);
+    bus.emit(Events.Change, { ..._state });
+  });
+  listen<{ percent: number }>("deno_download_percent", (event) => {
+    const data = event.payload;
+    _deno.percent = parseFloat(data.percent.toFixed(2));
+    bus.emit(Events.Change, { ..._state });
+  });
+  listen<{ percent: number }>("lobe_chat_download_percent", (event) => {
+    const data = event.payload;
+    _lobe_chat.percent = parseFloat(data.percent.toFixed(2));
+    bus.emit(Events.Change, { ..._state });
+  });
   listen("tauri://close-requested", (event) => {
     execute("\x03");
     term.dispose();
   });
 
   return {
-    state,
+    state: _state,
     ui: {},
     async ready() {
       const $term = document.getElementById("terminal");
@@ -296,26 +325,27 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       }
       await sleep(800);
       fitAddon.fit();
-      const r2 = await requests.resizePTY.run({
+      await requests.resizePTY.run({
         rows: term.rows,
         cols: term.cols,
       });
-      if (r2.error) {
-        app.tip({
-          text: [r2.error.message],
-        });
-        return;
-      }
       const r3 = await requests.fetchSetupConfig.run();
       if (r3.error) {
         app.tip({
           text: ["获取初始化信息失败", r3.error.message],
         });
+        _step = LobeChatSteps.SetupFailed;
         return;
       }
+      console.log("[PAGE]home/index - setup config", r3.data);
       if (!r3.data.deno_existing) {
+        _step = LobeChatSteps.InstallDeno;
+        bus.emit(Events.Change, { ..._state });
         const r4 = await requests.downloadDeno.run();
         if (r4.error) {
+          _step = LobeChatSteps.InstallDenoFailed;
+          _deno.error = r4.error;
+          bus.emit(Events.Change, { ..._state });
           app.tip({
             text: ["下载 deno 失败", r4.error.message],
           });
@@ -323,19 +353,22 @@ function HomeIndexPageCore(props: ViewComponentProps) {
         }
         return;
       }
-      if (!r3.data.lobe_chat_dir) {
-        const r4 = await requests.downloadLobeChat.run({
-          url: "https://ghp.ci/https://github.com/ltaoo/LobeChatClient/releases/download/v1.36.11/lobe-chat_v1.36.11.zip",
-          path: "lobe-chat_v1.36.11.zip",
-        });
+      _deno.existing = true;
+      if (!r3.data.lobe_chat_existing) {
+        _step = LobeChatSteps.DownloadLobeChat;
+        bus.emit(Events.Change, { ..._state });
+        const r4 = await requests.downloadLobeChat.run();
         if (r4.error) {
-          app.tip({
-            text: ["下载 LobeChat 失败", r4.error.message],
-          });
+          _step = LobeChatSteps.DownloadLobeChatFailed;
+          _lobe_chat.error = r4.error;
+          bus.emit(Events.Change, { ..._state });
           return;
         }
         return;
       }
+      _step = LobeChatSteps.StartLobeChatServer;
+      _lobe_chat.existing = true;
+      bus.emit(Events.Change, { ..._state });
       startLobeChatServer({
         bin_path: r3.data.deno_bin,
         lobe_chat_path: r3.data.lobe_chat_dir,
@@ -386,7 +419,123 @@ export const HomeIndexPage: ViewComponent = (props) => {
           </div>
         </div>
       </div>
-      <div class="absolute z-10 inset-0"></div>
+      <div class="absolute z-10 inset-0">
+        <div class="w-full h-full py-12 px-8 space-y-2">
+          <Show when={state().step === LobeChatSteps.CheckDenoExisting}>
+            <div class="flex items-center text-white space-x-4">
+              <Loader class="w-4 h-4 animate animate-spin" />
+              <div>Check environment</div>
+            </div>
+          </Show>
+          <Show when={state().step === LobeChatSteps.InstallDeno}>
+            <div class="flex text-white space-x-4">
+              <Loader class="mt-1 w-4 h-4 animate animate-spin" />
+              <div class="flex-1 flex flex-col">
+                <div>Install deno</div>
+                <div class="mt-2">
+                  <For each={state().deno.messages}>
+                    {(msg) => {
+                      return <div class="break-all">{msg}</div>;
+                    }}
+                  </For>
+                </div>
+                <Show when={state().deno.percent !== 0}>
+                  <div class="mt-2 flex items-center w-full h-[16px]">
+                    <div class="h-full bg-green-500" style={{ width: `${state().deno.percent}%` }}></div>
+                    <div class="ml-1 text-gray-200">{state().deno.percent}%</div>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().deno.existing}>
+            <div class="flex items-center text-white space-x-4">
+              <Check class="w-4 h-4 text-green-500" />
+              <div class="flex space-x-2">
+                <div>deno prepared</div>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().deno.error}>
+            <div class="flex text-white space-x-4">
+              <Info class="mt-1 w-4 h-4 text-red-500" />
+              <div class="flex-1 flex flex-col">
+                <div>Install deno failed</div>
+                <div class="break-all">{state().deno.error!.message}</div>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().step === LobeChatSteps.DownloadLobeChat}>
+            <div class="flex w-full text-white space-x-4">
+              <Loader class="mt-1 w-4 h-4 animate animate-spin" />
+              <div class="flex-1 flex flex-col">
+                <div>Download LobeChat</div>
+                <div class="mt-2">
+                  <For each={state().lobe_chat.messages}>
+                    {(msg) => {
+                      return <div class="break-all">{msg}</div>;
+                    }}
+                  </For>
+                </div>
+                <Show when={state().lobe_chat.percent !== 0}>
+                  <div class="mt-2 flex items-center w-full h-[16px]">
+                    <div class="h-full bg-green-500" style={{ width: `${state().lobe_chat.percent}%` }}></div>
+                    <div class="ml-1 text-gray-200">{state().lobe_chat.percent}%</div>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().lobe_chat.existing}>
+            <div class="flex items-center text-white space-x-4">
+              <Check class="w-4 h-4 text-green-500" />
+              <div class="flex space-x-2">
+                <div>LobeChat prepared</div>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().lobe_chat.error}>
+            <div class="flex text-white space-x-4">
+              <Info class="mt-1 w-4 h-4 text-red-500" />
+              <div class="flex-1 flex flex-col">
+                <div>Download LobeChat failed</div>
+                <div class="break-all">{state().lobe_chat.error!.message}</div>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().step === LobeChatSteps.StartLobeChatServer}>
+            <div class="flex w-full text-white space-x-4">
+              <Loader class="mt-1 w-4 h-4 animate animate-spin" />
+              <div class="flex-1 flex flex-col">
+                <div>Start LobeChat server...</div>
+                <div class="mt-2">
+                  <For each={state().server.messages}>
+                    {(msg) => {
+                      return <div class="break-all">{msg}</div>;
+                    }}
+                  </For>
+                </div>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().step === LobeChatSteps.PrepareShowLobeChat}>
+            <div class="flex items-center text-white space-x-4">
+              <Check class="w-4 h-4 text-green-500" />
+              <div class="flex items-center space-x-2">
+                <div>LobeChat server is ok</div>
+              </div>
+            </div>
+          </Show>
+          <Show when={state().step === LobeChatSteps.SetupFailed}>
+            <div class="flex items-center text-white space-x-4">
+              <Info class="w-4 h-4 text-red-500" />
+              <div class="flex space-x-2">
+                <div>Setup failed.</div>
+              </div>
+            </div>
+          </Show>
+        </div>
+      </div>
       <div class="absolute z-0 top-0 bottom-0 w-full p-4">
         <div id="terminal" class="w-full h-full"></div>
         <div class="absolute top-0 w-full h-[68px] bg-gradient-to-b from-black to-transparent"></div>

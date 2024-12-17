@@ -1,7 +1,11 @@
 import { request } from "@/biz/requests";
 
+/** 获取初始化信息 */
 export function fetchSetupConfig() {
-  return request.post<{ deno_bin: string; deno_existing: boolean; lobe_chat_dir: string }>("fetch_setup_info", {});
+  return request.post<{ deno_bin: string; deno_existing: boolean; lobe_chat_dir: string; lobe_chat_existing: boolean }>(
+    "fetch_setup_config",
+    {}
+  );
 }
 
 /**
@@ -14,8 +18,8 @@ export function downloadDeno() {
 /**
  * 下载压缩包并解压
  */
-export function downloadLobeChatBundle(payload: { url: string; path: string }) {
-  return request.post<void>("download_file", payload);
+export function downloadLobeChatBundle() {
+  return request.post<void>("download_lobe_chat", {});
 }
 
 /**
