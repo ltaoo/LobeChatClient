@@ -7,6 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { type } from "@tauri-apps/plugin-os";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -145,8 +146,10 @@ function HomeIndexPageCore(props: ViewComponentProps) {
   }
   async function startLobeChatServer(config: { lobe_chat_path: string; bin_path: string }) {
     // console.log("[PAGE]home/index - startLobeChatServer", _config.lobe_chat_build_dir);
+    const PORT = 6188;
+    const env_command = type() === "windows" ? `set PORT=${PORT}` : `PORT=${PORT}`;
     await execute(`cd ${config.lobe_chat_path}\r`);
-    await execute(`${config.bin_path} run --allow-all server.cjs\r`);
+    await execute(`${env_command} ${config.bin_path} run --allow-all server.cjs\r`);
     _pty_state.step = 4;
   }
   const handle_output = debounce(800, async () => {
@@ -186,7 +189,7 @@ function HomeIndexPageCore(props: ViewComponentProps) {
       const webview = new WebviewWindow("main", {
         title: "LobeChatClient",
         width: 1200,
-        height: 80,
+        height: 800,
         url,
       });
       webview.show();

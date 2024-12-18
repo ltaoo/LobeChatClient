@@ -1,16 +1,14 @@
 {
   "identifier": "desktop-capability",
-  "platforms": [
-    "macOS",
-    "windows",
-    "linux"
-  ],
-  "windows": [
-    "setup",
-    "main"
-  ],
+  "platforms": ["macOS", "windows", "linux"],
+  "windows": ["setup", "main"],
+  "webviews": ["main"],
+  "remote": {
+    "urls": ["http://localhost:6188/"]
+  },
   "permissions": [
     "window-state:default",
+    "shell:default",
     "core:webview:allow-webview-show",
     "core:webview:allow-webview-hide",
     "core:webview:allow-create-webview-window",
