@@ -34,6 +34,8 @@ struct AppState {
      * 用于存放 LobeChat 打包文件以及配置文件
      */
     pub document_dir: PathBuf,
+    /** deno 下载地址 */
+    pub deno_zip_url: String,
     /** deno 二进制文件路径 */
     pub deno_bin: PathBuf,
     /** 需要下载的 deno 压缩包文件路径 */
@@ -146,18 +148,17 @@ async fn download_deno(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let state = app.state::<tokio::sync::Mutex<AppState>>();
-    let mut state = state.lock().await;
+    let state1 = app.state::<tokio::sync::Mutex<AppState>>();
+    let mut state = state1.lock().await;
+
+    println!("[COMMAND]download_deno");
 
     let deno_version = &state.deno_version;
     let target = &state.os_target;
+    let deno_uri = String::from(&state.deno_zip_url);
     let deno_bin_filepath = PathBuf::from(&state.deno_bin);
-    // https://github.com/denoland/deno/releases/download/v2.1.4/deno-aarch64-apple-darwin.zip
-    let deno_uri = format!(
-        "https://ghp.ci/https://github.com/denoland/deno/releases/download/v{}/deno-{}.zip",
-        deno_version, target
-    );
     let deno_zip_filepath = PathBuf::from(&state.downloading_deno_zip);
+
     if !deno_zip_filepath.exists() {
         window.emit(
             "deno_download_start",
@@ -200,22 +201,40 @@ async fn download_deno(
             "unzip_deno",
             json!({"file": &deno_zip_filepath.display().to_string()}),
         );
-        let mut archive =
-            ZipArchive::new(fs::File::open(&deno_zip_filepath).expect("Failed to open ZIP file"))
-                .unwrap();
-        let r = archive.extract(&deno_bin_filepath.parent().unwrap());
+        let r1 = fs::File::open(&deno_zip_filepath);
+        if r1.is_err() {
+            fs::remove_file(&deno_zip_filepath);
+            window.emit(
+                "deno_download_failed",
+                json!({ "reason": "open deno zip file failed", "url": &deno_uri, "filepath": &deno_zip_filepath.display().to_string() }),
+            );
+            return Ok(());
+        }
+        let file = r1.unwrap();
+        let r2 = ZipArchive::new(file);
+        if r2.is_err() {
+            fs::remove_file(&deno_zip_filepath);
+            window.emit(
+                "deno_download_failed",
+                json!({ "reason": "open file with zip archive failed", "url": &deno_uri, "filepath": &deno_zip_filepath.display().to_string() }),
+            );
+            return Ok(());
+        }
+        let mut archive = r2.unwrap();
+        let r3 = archive.extract(&deno_bin_filepath.parent().unwrap());
         // let r = extract_zip(&deno_zip_filepath, &deno_bin_filepath);
-        if r.is_err() {
+        if r3.is_err() {
             fs::remove_file(&deno_zip_filepath);
             window.emit("deno_download_failed", json!({ "reason": "unzip failed", "filepath": &deno_zip_filepath.display().to_string() }));
             return Ok(());
         }
         // fs::remove_file(zip_path).expect("Failed to delete ZIP file");
-        Command::new("chmod")
-            .arg("+x")
-            .arg(&deno_bin_filepath)
-            .output()
-            .unwrap();
+        write_to_pty(format!("chmod -x {}", &deno_bin_filepath.display().to_string()), state1.clone());
+        // Command::new("chmod")
+        //     .arg("+x")
+        //     .arg(&deno_bin_filepath)
+        //     .output()
+        //     .unwrap();
         window.set_focus();
     }
     window.emit(
@@ -517,17 +536,25 @@ pub fn run() {
                 }
                 _ => "x86_64-unknown-linux-gnu",
             };
+            let proxy_url = "https://ghp.ci/";
+            // let proxy_url = "";
             let deno_dir = format!("{}/.deno", dirs::home_dir().unwrap().display());
             let deno_bin_dir = PathBuf::from(&deno_dir).join("bin");
             let deno_bin_path = deno_bin_dir.join("deno");
             let deno_bin_existing = deno_bin_path.exists();
             let deno_version = String::from("2.1.4");
-            let deno_filename = format!("deno-{}-{}.zip", deno_version, target);
+            let deno_filename = format!("deno-{}.zip", target);
             let deno_zip_filepath = PathBuf::from(&document_dir).join(deno_filename);
+            // let prefix = "https://static.funzm.com/assets/other";
+            let prefix = "https://github.com/denoland/deno/releases/download";
+            let deno_uri = format!("{}{}/v{}/deno-{}.zip", proxy_url, prefix, deno_version, target);
 
             let lobe_build_dir = document_dir.join("lobe-chat_v1.36.11");
             let lobe_chat_zip = document_dir.join("lobe-chat_v1.36.11.zip");
-            let lobe_chat_zip_url =  format!("{}https://github.com/ltaoo/LobeChatClient/releases/download/v1.36.11/lobe-chat_v1.36.11.zip", "https://ghp.ci/");
+
+            // let prefix = "https://static.funzm.com/assets/other";
+            let prefix = "https://github.com/ltaoo/LobeChatClient/releases/download/v1.36.11";
+            let lobe_chat_zip_url = format!("{}{}/lobe-chat_v1.36.11.zip", proxy_url, prefix);
             let lobe_build_dir_existing = lobe_build_dir.exists();
 
             fs::create_dir_all(&deno_dir).unwrap();
@@ -537,6 +564,7 @@ pub fn run() {
             let state = tokio::sync::Mutex::new(AppState {
                 os_target: String::from(target),
                 document_dir: document_dir,
+                deno_zip_url: deno_uri,
                 deno_bin: deno_bin_path,
                 deno_version: deno_version,
                 deno_existing: deno_bin_existing,

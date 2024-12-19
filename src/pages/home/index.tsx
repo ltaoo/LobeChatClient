@@ -126,11 +126,11 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     smoothScrollDuration: 0,
     scrollback: 0,
     scrollOnUserInput: false,
-    rows: 24,
+    rows: 12,
     cols: 80,
   });
   term.loadAddon(new WebLinksAddon());
-  term.loadAddon(new CanvasAddon());
+  // term.loadAddon(new CanvasAddon());
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
 
@@ -147,7 +147,7 @@ function HomeIndexPageCore(props: ViewComponentProps) {
   async function startLobeChatServer(config: { lobe_chat_path: string; bin_path: string }) {
     // console.log("[PAGE]home/index - startLobeChatServer", _config.lobe_chat_build_dir);
     const PORT = 6188;
-    const env_command = type() === "windows" ? `set PORT=${PORT}` : `PORT=${PORT}`;
+    const env_command = type() === "windows" ? `$env:PORT=${PORT};` : `PORT=${PORT}`;
     await execute(`cd ${config.lobe_chat_path}\r`);
     await execute(`${env_command} ${config.bin_path} run --allow-all server.cjs\r`);
     _pty_state.step = 4;
@@ -239,6 +239,7 @@ function HomeIndexPageCore(props: ViewComponentProps) {
   });
   listen<{ uri: string; target: string }>("deno_download_start", (event) => {
     const data = event.payload;
+    console.log("[PAGE]home/index - handle deno_download_start", data);
     _deno.messages.push(`url: ${data.uri}`);
     _deno.messages.push(`download to: ${data.target}`);
     bus.emit(Events.Change, { ..._state });
@@ -314,11 +315,11 @@ function HomeIndexPageCore(props: ViewComponentProps) {
     state: _state,
     ui: {},
     async ready() {
-      const $term = document.getElementById("terminal");
-      if (!$term) {
-        return;
-      }
-      term.open($term);
+      // const $term = document.getElementById("terminal");
+      // if (!$term) {
+      //   return;
+      // }
+      // term.open($term);
       const r = await requests.startPTY.run();
       if (r.error) {
         app.tip({
@@ -422,8 +423,8 @@ export const HomeIndexPage: ViewComponent = (props) => {
           </div>
         </div>
       </div>
-      <div class="absolute z-10 inset-0">
-        <div class="w-full h-full py-12 px-8 space-y-2">
+      <div class="overflow-hidden absolute z-10 inset-0">
+        <div class="w-full h-full py-8 px-8 space-y-2">
           <Show when={state().step === LobeChatSteps.CheckDenoExisting}>
             <div class="flex items-center text-white space-x-4">
               <Loader class="w-4 h-4 animate animate-spin" />
@@ -539,8 +540,8 @@ export const HomeIndexPage: ViewComponent = (props) => {
           </Show>
         </div>
       </div>
-      <div class="absolute z-0 top-0 bottom-0 w-full p-4">
-        <div id="terminal" class="w-full h-full"></div>
+      <div class="absolute z-0 top-0 bottom-0 w-full p-4 scroll--hidden">
+        {/* <div id="terminal" class="w-full h-full scroll--hidden"></div> */}
         <div class="absolute top-0 w-full h-[68px] bg-gradient-to-b from-black to-transparent"></div>
         <div class="absolute bottom-0 w-full h-[68px] bg-gradient-to-t from-black to-transparent"></div>
       </div>

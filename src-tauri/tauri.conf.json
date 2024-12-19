@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "setup",
-        "title": "LobeChat Setup",
+        "title": "LobeChat Loading",
         "width": 680,
         "height": 240,
         "visible": true,
