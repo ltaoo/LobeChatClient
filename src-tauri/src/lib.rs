@@ -536,7 +536,7 @@ pub fn run() {
                 }
                 _ => "x86_64-unknown-linux-gnu",
             };
-            let proxy_url = "https://ghp.ci/";
+            let proxy_url = "https://ghgo.xyz/";
             // let proxy_url = "";
             let deno_dir = format!("{}/.deno", dirs::home_dir().unwrap().display());
             let deno_bin_dir = PathBuf::from(&deno_dir).join("bin");
